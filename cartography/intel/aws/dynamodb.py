@@ -115,8 +115,9 @@ def sync_dynamodb_tables(
         logger.info("Syncing DynamoDB for region in '%s' in account '%s'.", region, current_aws_account_id)
         data = get_dynamodb_tables(boto3_session, region)
         if common_job_parameters['aws_resource_name'] is not None:
-          logger.info('Filtering to run updation for: %s', common_job_parameters['aws_resource_name'])
-          data = filterfn.filter_resources(data, common_job_parameters['aws_resource_name'], 'dynamodb') #bucket_data is updated in the function itself
+            logger.info('Filtering to run updation for: %s', common_job_parameters['aws_resource_name'])
+            # bucket_data is updated in the function itself
+            data = filterfn.filter_resources(data, common_job_parameters['aws_resource_name'], 'dynamodb')
         load_dynamodb_tables(neo4j_session, data, region, current_aws_account_id, aws_update_tag)
     cleanup_dynamodb_tables(neo4j_session, common_job_parameters)
 

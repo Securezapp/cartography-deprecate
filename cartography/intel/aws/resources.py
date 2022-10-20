@@ -74,6 +74,6 @@ RESOURCE_FUNCTIONS: Dict = {
 }
 
 RESOURCE_IDENTIFIERS: Dict = {
-  'rds_cluster': 'DBClusterIdentifier',
-  'rds_instance': 'DBInstanceIdentifier',
+    'rds_cluster': 'DBClusterIdentifier',
+    'rds_instance': 'DBInstanceIdentifier',
 }
