@@ -6,7 +6,7 @@ from . import (apigateway, config, dynamodb, ecr, ecs, eks, elasticache,
                elasticsearch, emr, iam, kms, lambda_function,
                permission_relationships, rds, redshift,
                resourcegroupstaggingapi, route53, s3, s3_list_only,
-               secretsmanager, securityhub, sqs, ssm)
+               secretsmanager, securityhub, sqs, ssm, inspector)
 from .ec2.auto_scaling_groups import sync_ec2_auto_scaling_groups
 from .ec2.elastic_ip_addresses import sync_elastic_ip_addresses
 from .ec2.images import sync_ec2_images
