@@ -355,7 +355,8 @@ def load_ec2_instances(
 
             load_ec2_instance_network_interfaces(neo4j_session, instance, update_tag)
             instance_ebs_volumes_list = get_ec2_instance_ebs_volumes(instance)
-            load_ec2_instance_ebs_volumes(neo4j_session, instance_ebs_volumes_list, current_aws_account_id, update_tag)
+            load_ec2_instance_ebs_volumes(neo4j_session, instance_ebs_volumes_list,
+                                          current_aws_account_id, region, update_tag)
 
 
 @timeit
@@ -374,11 +375,14 @@ def _load_ec2_instance_ebs_tx(
         ebs_data: List[Dict[str, Any]],
         update_tag: int,
         current_aws_account_id: str,
+        region: str
 ) -> None:
     query = """
         UNWIND {ebs_mappings_list} as em
             MERGE (vol:EBSVolume{id: em.Ebs.VolumeId})
-            ON CREATE SET vol.firstseen = timestamp()
+            ON CREATE SET vol.firstseen = timestamp(),
+            vol.borneo_id = apoc.create.uuid(),
+            vol.region = {region}
             SET vol.lastupdated = {update_tag},
                 vol.deleteontermination = em.Ebs.DeleteOnTermination,
                 vol.snapshotid = vol.SnapshotId
@@ -398,18 +402,20 @@ def _load_ec2_instance_ebs_tx(
         ebs_mappings_list=ebs_data,
         update_tag=update_tag,
         AWS_ACCOUNT_ID=current_aws_account_id,
+        region=region
     )
 
 
 @timeit
 def load_ec2_instance_ebs_volumes(
-        neo4j_session: neo4j.Session, ebs_data: List[Dict[str, Any]], current_aws_account_id: str, update_tag: int,
+        neo4j_session: neo4j.Session, ebs_data: List[Dict[str, Any]], current_aws_account_id: str, region: str, update_tag: int,
 ) -> None:
     neo4j_session.write_transaction(
         _load_ec2_instance_ebs_tx,
         ebs_data,
         update_tag,
         current_aws_account_id,
+        region
     )
 
 

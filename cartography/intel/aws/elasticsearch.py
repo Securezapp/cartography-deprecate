@@ -82,7 +82,7 @@ def _load_es_domains(
     UNWIND {Records} as record
     MERGE (es:ESDomain{id: record.DomainId})
     ON CREATE SET es.firstseen = timestamp(), es.arn = record.ARN, es.domainid = record.DomainId,
-    es.borneo_id = {es_borneo_id}
+    es.borneo_id = apoc.create.uuid()
     SET es.lastupdated = {aws_update_tag}, es.deleted = record.Deleted, es.created = record.created,
     es.endpoint = record.Endpoint, es.elasticsearch_version = record.ElasticsearchVersion,
     es.elasticsearch_cluster_config_instancetype = record.ElasticsearchClusterConfig.InstanceType,
@@ -117,8 +117,7 @@ def _load_es_domains(
         Records=domain_list,
         Region=region,
         AWS_ACCOUNT_ID=aws_account_id,
-        aws_update_tag=aws_update_tag,
-        es_borneo_id=str(uuid.uuid4())
+        aws_update_tag=aws_update_tag
     )
 
     for domain in domain_list:

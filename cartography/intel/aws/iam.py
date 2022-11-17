@@ -212,7 +212,7 @@ def load_users(
     MERGE (unode:AWSUser{arn: {ARN}})
     ON CREATE SET unode:AWSPrincipal, unode.userid = {USERID}, unode.firstseen = timestamp(),
     unode.createdate = {CREATE_DATE},
-    unode.borneo_id = {user_borneo_id}
+    unode.borneo_id = apoc.create.uuid()
     SET unode.name = {USERNAME}, unode.path = {PATH}, unode.passwordlastused = {PASSWORD_LASTUSED},
     unode.lastupdated = {aws_update_tag}
     WITH unode
@@ -232,8 +232,7 @@ def load_users(
             PATH=user["Path"],
             PASSWORD_LASTUSED=str(user.get("PasswordLastUsed", "")),
             AWS_ACCOUNT_ID=current_aws_account_id,
-            aws_update_tag=aws_update_tag,
-            user_borneo_id=str(uuid.uuid4())
+            aws_update_tag=aws_update_tag
         )
 
 
@@ -244,7 +243,7 @@ def load_groups(
     ingest_group = """
     MERGE (gnode:AWSGroup{arn: {ARN}})
     ON CREATE SET gnode.groupid = {GROUP_ID}, gnode.firstseen = timestamp(), gnode.createdate = {CREATE_DATE},
-    gnode.borneo_id = {group_borneo_id}
+    gnode.borneo_id = apoc.create.uuid()
     SET gnode:AWSPrincipal, gnode.name = {GROUP_NAME}, gnode.path = {PATH},gnode.lastupdated = {aws_update_tag}
     WITH gnode
     MATCH (aa:AWSAccount{id: {AWS_ACCOUNT_ID}})
@@ -262,8 +261,7 @@ def load_groups(
             GROUP_NAME=group["GroupName"],
             PATH=group["Path"],
             AWS_ACCOUNT_ID=current_aws_account_id,
-            aws_update_tag=aws_update_tag,
-            group_borneo_id=str(uuid.uuid4())
+            aws_update_tag=aws_update_tag
         )
 
 
@@ -290,7 +288,7 @@ def load_roles(
     MERGE (rnode:AWSRole{arn: {Arn}})
     ON CREATE SET rnode:AWSPrincipal, rnode.roleid = {RoleId}, rnode.firstseen = timestamp(),
     rnode.createdate = {CreateDate},
-    rnode.borneo_id = {role_borneo_id}
+    rnode.borneo_id = apoc.create.uuid()
     ON MATCH SET rnode.name = {RoleName}, rnode.path = {Path}
     SET rnode.lastupdated = {aws_update_tag}
     WITH rnode
@@ -322,8 +320,7 @@ def load_roles(
             RoleName=role["RoleName"],
             Path=role["Path"],
             AWS_ACCOUNT_ID=current_aws_account_id,
-            aws_update_tag=aws_update_tag,
-            role_borneo_id=str(uuid.uuid4())
+            aws_update_tag=aws_update_tag
         )
 
         for statement in role["AssumeRolePolicyDocument"]["Statement"]:
@@ -439,7 +436,7 @@ def load_user_access_keys(neo4j_session: neo4j.Session, user_access_keys: Dict, 
     WITH user
     MERGE (key:AccountAccessKey{accesskeyid: {AccessKeyId}})
     ON CREATE SET key.firstseen = timestamp(), key.createdate = {CreateDate},
-    key.borneo_id = {key_borneo_id}
+    key.borneo_id = apoc.create.uuid()
     SET key.status = {Status}, key.lastupdated = {aws_update_tag}
     WITH user,key
     MERGE (user)-[r:AWS_ACCESS_KEY]->(key)
@@ -456,8 +453,7 @@ def load_user_access_keys(neo4j_session: neo4j.Session, user_access_keys: Dict, 
                     AccessKeyId=key['AccessKeyId'],
                     CreateDate=str(key['CreateDate']),
                     Status=key['Status'],
-                    aws_update_tag=aws_update_tag,
-                    key_borneo_id=str(uuid.uuid4())
+                    aws_update_tag=aws_update_tag
                 )
 
 
@@ -515,7 +511,7 @@ def _load_policy_tx(
         policy.firstseen = timestamp(),
         policy.type = {PolicyType},
         policy.name = {PolicyName},
-        policy.borneo_id = {policy_borneo_id}
+        policy.borneo_id = apoc.create.uuid()
     SET policy.lastupdated = {aws_update_tag}
     WITH policy
     MATCH (principal:AWSPrincipal{arn: {PrincipalArn}})
@@ -528,8 +524,7 @@ def _load_policy_tx(
         PolicyName=policy_name,
         PolicyType=policy_type,
         PrincipalArn=principal_arn,
-        aws_update_tag=aws_update_tag,
-        policy_borneo_id=str(uuid.uuid4())
+        aws_update_tag=aws_update_tag
     )
 
 
@@ -552,7 +547,7 @@ def load_policy_statements(
         UNWIND {Statements} as statement_data
         MERGE (statement:AWSPolicyStatement{id: statement_data.id})
         ON CREATE SET
-        statement.borneo_id = {statement_borneo_id}
+        statement.borneo_id = apoc.create.uuid()
         SET
         statement.effect = statement_data.Effect,
         statement.action = statement_data.Action,
@@ -571,8 +566,7 @@ def load_policy_statements(
         PolicyId=policy_id,
         PolicyName=policy_name,
         Statements=statements,
-        aws_update_tag=aws_update_tag,
-        statement_borneo_id=str(uuid.uuid4())
+        aws_update_tag=aws_update_tag
     ).consume()
 
 

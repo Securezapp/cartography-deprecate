@@ -78,7 +78,7 @@ def load_instance_information(
     UNWIND {InstanceInformation} AS instance
         MERGE (i:SSMInstanceInformation{id: instance.InstanceId})
         ON CREATE SET i.firstseen = timestamp(),
-            i.borneo_id = {info_borneo_id}
+            i.borneo_id = apoc.create.uuid()
         SET i.instance_id = instance.InstanceId,
             i.ping_status = instance.PingStatus,
             i.last_ping_date_time = instance.LastPingDateTime,
@@ -123,8 +123,7 @@ def load_instance_information(
         InstanceInformation=data,
         Region=region,
         AWS_ACCOUNT_ID=current_aws_account_id,
-        aws_update_tag=aws_update_tag,
-        info_borneo_id=str(uuid.uuid4())
+        aws_update_tag=aws_update_tag
     )
 
 
@@ -140,7 +139,7 @@ def load_instance_patches(
     UNWIND {InstancePatch} AS patch
         MERGE (p:SSMInstancePatch{id: patch._instance_id + "-" + patch.Title})
         ON CREATE SET p.firstseen = timestamp(),
-            p.borneo_id = {patch_borneo_id}
+            p.borneo_id = apoc.create.uuid()
         SET p.instance_id = patch._instance_id,
             p.title = patch.Title,
             p.kb_id = patch.KBId,
@@ -173,8 +172,7 @@ def load_instance_patches(
         InstancePatch=data,
         Region=region,
         AWS_ACCOUNT_ID=current_aws_account_id,
-        aws_update_tag=aws_update_tag,
-        patch_borneo_id=str(uuid.uuid4())
+        aws_update_tag=aws_update_tag
     )
 
 
