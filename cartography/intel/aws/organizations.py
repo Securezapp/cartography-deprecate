@@ -93,12 +93,12 @@ def load_aws_accounts(
     query = """
     MERGE (aa:AWSAccount{id: {ACCOUNT_ID}})
     ON CREATE SET aa.firstseen = timestamp(),
-    aa.borneo_id = {account_borneo_id}
+    aa.borneo_id = apoc.create.uuid()
     SET aa.lastupdated = {aws_update_tag}, aa.name = {ACCOUNT_NAME}
     WITH aa
     MERGE (root:AWSPrincipal{arn: {RootArn}})
     ON CREATE SET root.firstseen = timestamp(), root.type = 'AWS',
-    root.borneo_id = {root_borneo_id}
+    root.borneo_id = apoc.create.uuid()
     SET root.lastupdated = {aws_update_tag}
     WITH aa, root
     MERGE (aa)-[r:RESOURCE]->(root)
@@ -112,9 +112,7 @@ def load_aws_accounts(
             ACCOUNT_ID=account_id,
             ACCOUNT_NAME=account_name,
             RootArn=root_arn,
-            aws_update_tag=aws_update_tag,
-            account_borneo_id=str(uuid.uuid4()),
-            root_borneo_id=str(uuid.uuid4())
+            aws_update_tag=aws_update_tag
         )
 
 
