@@ -99,7 +99,8 @@ def _load_es_domains(
     es.encryption_at_rest_options_kms_key_id = record.EncryptionAtRestOptions.KmsKeyId,
     es.log_publishing_options_cloudwatch_log_group_arn = record.LogPublishingOptions.CloudWatchLogsLogGroupArn,
     es.log_publishing_options_enabled = record.LogPublishingOptions.Enabled,
-    es.region = {Region}
+    es.region = {Region},
+    es.node_to_node_encryption = record.NodeToNodeEncryptionOptions.Enabled
     WITH es
     MATCH (account:AWSAccount{id: {AWS_ACCOUNT_ID}})
     MERGE (account)-[r:RESOURCE]->(es)
@@ -125,7 +126,6 @@ def _load_es_domains(
         _link_es_domains_to_dns(neo4j_session, domain_id, domain, aws_update_tag)
         _link_es_domain_vpc(neo4j_session, domain_id, domain, aws_update_tag)
         _process_access_policy(neo4j_session, domain_id, domain)
-
 
 @timeit
 def _link_es_domains_to_dns(
