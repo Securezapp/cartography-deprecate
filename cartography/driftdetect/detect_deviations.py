@@ -3,7 +3,7 @@ import os
 
 from marshmallow import ValidationError
 
-from cartography.driftdetect.reporter import report_drift
+from cartography.driftdetect.reporter import get_drift_as_json
 from cartography.driftdetect.serializers import ShortcutSchema
 from cartography.driftdetect.serializers import StateSchema
 from cartography.driftdetect.storage import FileSystem
@@ -40,7 +40,7 @@ def run_drift_detection(config):
         )
         end_state = state_serializer.load(end_state_data)
         new_results, missing_results = perform_drift_detection(start_state, end_state)
-        report_drift(new_results, missing_results, end_state.name, end_state.properties)
+        return get_drift_as_json(new_results, missing_results, end_state.name, end_state.properties)
     except ValidationError as err:
         msg = "Unable to create DriftStates from files {},{} for \n{} in directory {}.".format(
             config.start_state,

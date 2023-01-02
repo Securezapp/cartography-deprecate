@@ -205,6 +205,14 @@ class CLI:
             ),
         )
         parser.add_argument(
+            '--aws-resource-type',
+            type=str,
+            default=None,
+            help=(
+                'AWS resource type for which the updation of resource needs to be performed'
+            ),
+        )
+        parser.add_argument(
             '--aws-region',
             type=str,
             default=None,
@@ -576,6 +584,6 @@ def main(argv=None, sync_flag=None):
     else:
         if(requested_sync != "default"):
             logger.warning("The requested sync doesn't exist, running the default sync")
-        default_sync = cartography.sync.build_default_borneo_sync()
+        default_sync = cartography.sync.build_default_borneo_sync(requested_sync == 'skip_index')
         result = CLI(default_sync, prog='cartography').main(argv)
     return result

@@ -47,6 +47,16 @@ def get_s3_bucket_list(boto3_session: boto3.session.Session) -> List[Dict]:
 
 
 @timeit
+def get_single_s3_bucket(boto3_session: boto3.session.Session, bucketName, bucketData, region):
+    bucket = {}
+    s3 = boto3_session.resource('s3')
+    bucketDetails = s3.Bucket(bucketName)
+    bucket['Name'] = bucketDetails.name
+    bucket['CreationDate'] = bucketDetails.creation_date
+    bucket['Region'] = region
+    bucketData['Buckets'].append(bucket)
+
+@timeit
 def get_s3_bucket_details(
         boto3_session: boto3.session.Session,
         bucket_data: Dict,
@@ -124,6 +134,10 @@ def get_encryption(bucket: Dict, client: botocore.client.BaseClient) -> Optional
         encryption = client.get_bucket_encryption(Bucket=bucket['Name'])
     except ClientError as e:
         if _is_common_exception(e, bucket):
+            if "ServerSideEncryptionConfigurationNotFoundError" in e.args[0]:
+                return {
+                    "ServerSideEncryptionConfigurationNotFoundError": True
+                }
             pass
         else:
             raise
@@ -271,7 +285,7 @@ def _load_s3_encryption(neo4j_session: neo4j.Session, encryption_configs: List[D
     ingest_encryption = """
     UNWIND {encryption_configs} AS encryption
     MATCH (s:S3Bucket) where s.name = encryption.bucket
-    SET s.default_encryption = (coalesce(s.default_encryption, false) OR encryption.default_encryption),
+    SET s.default_encryption = coalesce(encryption.default_encryption, false),
     s.encryption_algorithm = encryption.encryption_algorithm,
     s.encryption_key_id = encryption.encryption_key_id, s.bucket_key_enabled = encryption.bucket_key_enabled,
     s.lastupdated = {UpdateTag}
@@ -541,6 +555,14 @@ def parse_encryption(bucket: str, encryption: Optional[Dict]) -> Optional[Dict]:
     # }
     if encryption is None:
         return None
+    if (encryption.get("ServerSideEncryptionConfigurationNotFoundError")):
+        return {
+            "bucket": bucket,
+            "default_encryption": False,
+            "encryption_algorithm": "NA",
+            "bucket_key_enabled": False,
+            "encryption_key_id": "NA",
+        }
     _ssec = encryption.get('ServerSideEncryptionConfiguration', {})
     # Rules is a list, but only one rule ever exists
     try:
@@ -648,13 +670,18 @@ def sync(
     update_tag: int, common_job_parameters: Dict,
 ) -> None:
     resourceFound = False
-    logger.info("Syncing S3 for account '%s'.", current_aws_account_id)
-    bucket_data = get_s3_bucket_list(boto3_session)
+    bucket_data = {
+        'Buckets': [],
+        'Owner': {}
+    }
     if common_job_parameters['aws_resource_name'] is not None:
-        logger.info('Filtering to run updation for: %s', common_job_parameters['aws_resource_name'])
-        # bucket_data is updated in the function itself
-        filtered = filterfn.filter_resources(bucket_data, common_job_parameters['aws_resource_name'], 's3')
+        logger.info("Fetching '%s' bucket details", common_job_parameters['aws_resource_name'])
+        get_single_s3_bucket(
+            boto3_session, common_job_parameters['aws_resource_name'], bucket_data, common_job_parameters['aws_region'])
         resourceFound = True
+    else:
+        logger.info("Syncing S3 for account '%s'.", current_aws_account_id)
+        bucket_data = get_s3_bucket_list(boto3_session)
     load_s3_buckets(neo4j_session, bucket_data, current_aws_account_id, update_tag)
     if (not resourceFound):
         cleanup_s3_buckets(neo4j_session, common_job_parameters)
