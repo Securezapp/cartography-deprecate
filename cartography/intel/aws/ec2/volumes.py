@@ -40,6 +40,7 @@ def load_volumes(
         MERGE (vol:EBSVolume{id: volume.VolumeId})
         ON CREATE SET vol.firstseen = timestamp()
         SET vol.arn = volume.VolumeArn,
+            vol.borneo_id = apoc.create.uuid(),
             vol.lastupdated = {update_tag},
             vol.availabilityzone = volume.AvailabilityZone,
             vol.createtime = volume.CreateTime,
