@@ -268,6 +268,8 @@ def _load_s3_policies(neo4j_session: neo4j.Session, policies: List[Dict], update
     MATCH (s:S3Bucket) where s.name = policy.bucket
     SET s.anonymous_access = (coalesce(s.anonymous_access, false) OR policy.internet_accessible),
     s.anonymous_actions = coalesce(s.anonymous_actions, []) + policy.accessible_actions,
+    s.public_policy_access_enabled = coalesce(policy.internet_accessible, false),
+    s.public_acl_access_enabled = coalesce(s.public_acl_access_enabled, false),
     s.lastupdated = {UpdateTag}
     """
 
@@ -334,7 +336,7 @@ def _load_s3_public_access_block(
     MATCH (s:S3Bucket) where s.name = public_access_block.bucket
     SET s.block_public_acls = public_access_block.block_public_acls,
         s.ignore_public_acls = public_access_block.ignore_public_acls,
-        s.block_public_acls = public_access_block.block_public_acls,
+        s.block_public_policy = public_access_block.block_public_policy,
         s.restrict_public_buckets = public_access_block.restrict_public_buckets,
         s.lastupdated = {UpdateTag}
     """
@@ -349,7 +351,8 @@ def _load_s3_public_access_block(
 def _set_default_values(neo4j_session: neo4j.Session, aws_account_id: str) -> None:
     set_defaults = """
     MATCH (:AWSAccount{id: {AWS_ID}})-[:RESOURCE]->(s:S3Bucket) where NOT EXISTS(s.anonymous_actions)
-    SET s.anonymous_access = false, s.anonymous_actions = []
+    SET s.anonymous_access = false, s.anonymous_actions = [],
+    s.public_acl_access_enabled = false
     """
     neo4j_session.run(
         set_defaults,
@@ -362,6 +365,15 @@ def _set_default_values(neo4j_session: neo4j.Session, aws_account_id: str) -> No
     """
     neo4j_session.run(
         set_encryption_defaults,
+        AWS_ID=aws_account_id,
+    )
+
+    set_public_policy_defaults = """
+    MATCH (:AWSAccount{id: {AWS_ID}})-[:RESOURCE]->(s:S3Bucket) where s.public_policy_access_enabled IS NULL
+    SET s.public_policy_access_enabled = false
+    """
+    neo4j_session.run(
+        set_public_policy_defaults,
         AWS_ID=aws_account_id,
     )
 
