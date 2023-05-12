@@ -62,7 +62,7 @@ def get_single_s3_bucket(boto3_session: boto3.session.Session, bucketName, bucke
 def get_s3_bucket_details(
         boto3_session: boto3.session.Session,
         bucket_data: Dict,
-) -> Generator[Tuple[str, Dict, Dict, Dict, Dict, Dict], None, None]:
+) -> Generator[Tuple[str, Dict, Dict, Dict, Dict, Dict, Dict], None, None]:
     """
     Iterates over all S3 buckets. Yields bucket name (string), S3 bucket policies (JSON), ACLs (JSON),
     default encryption policy (JSON), Versioning (JSON), and Public Access Block (JSON)
@@ -83,7 +83,8 @@ def get_s3_bucket_details(
         encryption = get_encryption(bucket, client)
         versioning = get_versioning(bucket, client)
         public_access_block = get_public_access_block(bucket, client)
-        yield bucket['Name'], acl, policy, encryption, versioning, public_access_block
+        bucket_ownership_control = get_bucket_ownership_control(bucket, client)
+        yield bucket['Name'], acl, policy, encryption, versioning, public_access_block, bucket_ownership_control
 
 
 @timeit
@@ -192,6 +193,26 @@ def get_public_access_block(bucket: Dict, client: botocore.client.BaseClient) ->
 
 
 @timeit
+def get_bucket_ownership_control(bucket: Dict, client: botocore.client.BaseClient) -> Optional[Dict]:
+    """
+    Gets the S3 bucket public access block configuration.
+    """
+    bucket_ownership_control = None
+    try:
+      bucket_ownership_control = client.get_bucket_ownership_controls(Bucket=bucket['Name'])
+    except ClientError as e:
+        if _is_common_exception(e, bucket):
+            pass
+        else:
+            raise
+    except EndpointConnectionError:
+        logger.warning(
+            f"Failed to retrieve S3 bucket object ownership controls for {bucket['Name']}"
+            " - Could not connect to the endpoint URL",
+        )
+    return bucket_ownership_control
+
+@timeit
 def _is_common_exception(e: Exception, bucket: Dict) -> bool:
     error_msg = "Failed to retrieve S3 bucket detail"
     if "AccessDenied" in e.args[0]:
@@ -220,6 +241,9 @@ def _is_common_exception(e: Exception, bucket: Dict) -> bool:
         return True
     elif "IllegalLocationConstraintException" in e.args[0]:
         logger.warning(f"{error_msg} for {bucket['Name']} - IllegalLocationConstraintException")
+        return True
+    elif "OwnershipControlsNotFoundError" in e.args[0]:
+        logger.warning(f"{error_msg} for {bucket['Name']} - OwnershipControlsNotFoundError")
         return True
     return False
 
@@ -347,6 +371,27 @@ def _load_s3_public_access_block(
         UpdateTag=update_tag,
     )
 
+@timeit
+def _load_s3_bucket_ownership_control(
+    neo4j_session: neo4j.Session,
+    bucket_ownership_control_configs: List[Dict],
+    update_tag: int,
+) -> None:
+    """
+    Ingest S3 object ownership controls into neo4j.
+    """
+    ingest_bucket_ownership_control = """
+    UNWIND {bucket_ownership_control_configs} AS bucket_ownership_control
+    MATCH (s:S3Bucket) where s.name = bucket_ownership_control.bucket
+    SET s.bucket_ownership_control = bucket_ownership_control.bucket_ownership_control,
+        s.lastupdated = {UpdateTag}
+    """
+
+    neo4j_session.run(
+        ingest_bucket_ownership_control,
+        bucket_ownership_control_configs=bucket_ownership_control_configs,
+        UpdateTag=update_tag,
+    )
 
 def _set_default_values(neo4j_session: neo4j.Session, aws_account_id: str) -> None:
     set_defaults = """
@@ -377,6 +422,14 @@ def _set_default_values(neo4j_session: neo4j.Session, aws_account_id: str) -> No
         AWS_ID=aws_account_id,
     )
 
+    set_bucket_ownership_control_defaults = """
+    MATCH (:AWSAccount{id: {AWS_ID}})-[:RESOURCE]->(s:S3Bucket) where NOT EXISTS (s.bucket_ownership_control)
+    SET s.bucket_ownership_control = 'ObjectWriter'
+    """
+    neo4j_session.run(
+        set_bucket_ownership_control_defaults,
+        AWS_ID=aws_account_id,
+    )
 
 @timeit
 def load_s3_details(
@@ -391,7 +444,8 @@ def load_s3_details(
     encryption_configs: List[Dict] = []
     versioning_configs: List[Dict] = []
     public_access_block_configs: List[Dict] = []
-    for bucket, acl, policy, encryption, versioning, public_access_block in s3_details_iter:
+    bucket_ownership_control_configs: List[Dict] = [] 
+    for bucket, acl, policy, encryption, versioning, public_access_block, bucket_ownership_control in s3_details_iter:
         parsed_acls = parse_acl(acl, bucket, aws_account_id)
         if parsed_acls is not None:
             acls.extend(parsed_acls)
@@ -407,6 +461,9 @@ def load_s3_details(
         parsed_public_access_block = parse_public_access_block(bucket, public_access_block)
         if parsed_public_access_block is not None:
             public_access_block_configs.append(parsed_public_access_block)
+        parsed_bucket_ownership_control = parse_bucket_ownership_control(bucket, bucket_ownership_control)
+        if parse_bucket_ownership_control is not None:
+          bucket_ownership_control_configs.append(parsed_bucket_ownership_control)
 
     # cleanup existing policy properties set on S3 Buckets
     run_cleanup_job(
@@ -420,6 +477,7 @@ def load_s3_details(
     _load_s3_encryption(neo4j_session, encryption_configs, update_tag)
     _load_s3_versioning(neo4j_session, versioning_configs, update_tag)
     _load_s3_public_access_block(neo4j_session, public_access_block_configs, update_tag)
+    _load_s3_bucket_ownership_control(neo4j_session, bucket_ownership_control_configs, update_tag)
     _set_default_values(neo4j_session, aws_account_id)
 
 
@@ -635,6 +693,30 @@ def parse_public_access_block(bucket: str, public_access_block: Optional[Dict]) 
         "restrict_public_buckets": pab.get("RestrictPublicBuckets"),
     }
 
+@timeit
+def parse_bucket_ownership_control(bucket: str, bucket_ownership_control: Optional[Dict]) -> Optional[Dict]: 
+  """ Parses the S3 Object Ownership Controls response and returns a dict of the relevant data """
+    # Object Ownership Response JSON looks like:
+    # {
+    # 'OwnershipControls': {
+    #    'Rules': [
+    #        {
+    #            'ObjectOwnership': 'BucketOwnerPreferred'|'ObjectWriter'|'BucketOwnerEnforced'
+    #        },
+    #    ]
+    #  }
+    # }
+  if bucket_ownership_control is None:
+    return None
+  _ownershipcontols = bucket_ownership_control.get("OwnershipControls", {})
+  try: 
+    rule = _ownershipcontols.get('Rules', []).pop()
+  except IndexError:
+    return None
+  return {
+    "bucket": bucket,
+    "bucket_ownership_control": rule.get('ObjectOwnership')
+  }
 
 @timeit
 def load_s3_buckets(neo4j_session: neo4j.Session, data: Dict, current_aws_account_id: str, aws_update_tag: int) -> None:
