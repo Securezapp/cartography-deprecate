@@ -1,4 +1,5 @@
 import datetime
+import json
 import logging
 import traceback
 from typing import Any, Dict, Iterable, List
@@ -45,10 +46,25 @@ def _sync_one_account(
 ) -> None:
     if not regions:
         regions = _autodiscover_account_regions(boto3_session, current_aws_account_id)
+
     if common_job_parameters["aws_region"] is not None and common_job_parameters["aws_region"] in regions:
         logger.info("Running syncs for region %s", common_job_parameters["aws_region"])
         regions.clear()
         regions.append(common_job_parameters["aws_region"])
+
+    if common_job_parameters["aws_region"] is not None:
+        if common_job_parameters["aws_region"].startswith('['):
+            regionsList = json.loads(common_job_parameters["aws_region"].replace("'", "\""))
+            if len(regionsList) > 1:
+                syncRegions = []
+                for region in regionsList:
+                    if region in regions:
+                        syncRegions.append(region)
+                regions.clear()
+                regions.extend(syncRegions)
+
+    logger.info('Syncing resources for regions: ', regions)
+
     sync_args = _build_aws_sync_kwargs(
         neo4j_session, boto3_session, regions, current_aws_account_id, update_tag, common_job_parameters,
     )
