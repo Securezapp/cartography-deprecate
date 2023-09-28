@@ -125,9 +125,9 @@ def _load_ec2_instance_tx(
 ) -> None:
     query = """
         MERGE (instance:Instance:EC2Instance{id: {InstanceId}})
-        ON CREATE SET instance.firstseen = timestamp()
+        ON CREATE SET instance.firstseen = timestamp(),
+            instance.borneo_id = apoc.create.uuid()
         SET instance.instanceid = {InstanceId},
-            instance.borneo_id = apoc.create.uuid(),
             instance.publicdnsname = {PublicDnsName},
             instance.privateipaddress = {PrivateIpAddress},
             instance.publicipaddress = {PublicIpAddress},
