@@ -67,7 +67,6 @@ def transform_dynamodb_tables(dynamodb_tables: List, region: str) -> Any:
             })
     return ddb_table_data, ddb_gsi_data
 
-
 @timeit
 def load_dynamodb_tables(
     neo4j_session: neo4j.Session, tables_data: List[Dict[str, Any]], region: str, current_aws_account_id: str,

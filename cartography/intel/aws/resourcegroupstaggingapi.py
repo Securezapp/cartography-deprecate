@@ -8,10 +8,7 @@ import neo4j
 import uuid
 
 from cartography.intel.aws.iam import get_role_tags
-from cartography.util import aws_handle_regions
-from cartography.util import batch
-from cartography.util import run_cleanup_job
-from cartography.util import timeit
+from cartography.util import aws_handle_regions, batch, run_cleanup_job, timeit
 
 logger = logging.getLogger(__name__)
 
@@ -254,8 +251,8 @@ def sync(
             logger.info('Only syncing %s tags', tagsToSync)
     for region in regions:
         logger.info(f"Syncing AWS tags for account {current_aws_account_id} and region {region}")
-        for resource_type in tag_resource_type_mappings.keys():
-            tag_data = get_tags(boto3_session, resource_type, region)
+        for resource_type in tagsToSync:
+            tag_data = get_tags(boto3_session, [resource_type], region)
             transform_tags(tag_data, resource_type)  # type: ignore
             logger.info(f"Loading {len(tag_data)} tags for resource type {resource_type}")
             load_tags(

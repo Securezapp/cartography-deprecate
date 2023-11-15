@@ -162,11 +162,10 @@ def load_aws_accounts(
     common_job_parameters: Dict,
 ) -> None:
     query = """
-    MERGE (aa:AWSAccount{id: $ACCOUNT_ID})
+    MERGE (aa:AWSAccount{id: {ACCOUNT_ID}})
     ON CREATE SET aa.firstseen = timestamp(),
-    aa.borneo_id = {account_borneo_id}
-    SET aa.lastupdated = $aws_update_tag, aa.name = $ACCOUNT_NAME, aa.inscope=true
-    REMOVE aa.foreign
+    aa.borneo_id = apoc.create.uuid()
+    SET aa.lastupdated = {aws_update_tag}, aa.name = {ACCOUNT_NAME}
     WITH aa
     MERGE (root:AWSPrincipal{arn: {RootArn}})
     ON CREATE SET root.firstseen = timestamp(), root.type = 'AWS',

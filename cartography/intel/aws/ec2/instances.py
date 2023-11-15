@@ -292,14 +292,80 @@ def load_ec2_network_interfaces(
         current_aws_account_id: str,
         update_tag: int,
 ) -> None:
-    load(
-        neo4j_session,
-        EC2NetworkInterfaceInstanceSchema(),
-        network_interface_list,
-        Region=region,
-        AWS_ID=current_aws_account_id,
-        lastupdated=update_tag,
-    )
+    for reservation in data:
+        reservation_id = reservation["ReservationId"]
+        neo4j_session.write_transaction(
+            _load_ec2_reservation_tx,
+            reservation_id,
+            reservation,
+            current_aws_account_id,
+            region,
+            update_tag,
+        )
+
+        for instance in reservation["Instances"]:
+            instanceid = instance["InstanceId"]
+
+            monitoring_state = instance.get("Monitoring", {}).get("State")
+
+            instance_state = instance.get("State", {}).get("Name")
+
+            # NOTE this is a hack because we're using a version of Neo4j that doesn't support temporal data types
+            launch_time = instance.get("LaunchTime")
+            if launch_time:
+                launch_time_unix = str(time.mktime(launch_time.timetuple()))
+            else:
+                launch_time_unix = ""
+
+            neo4j_session.write_transaction(
+                _load_ec2_instance_tx,
+                instanceid,
+                instance,
+                reservation_id,
+                monitoring_state,
+                launch_time,
+                launch_time_unix,
+                instance_state,
+                current_aws_account_id,
+                region,
+                update_tag,
+            )
+
+            # SubnetId can return None intermittently so attach only if non-None.
+            subnet_id = instance.get('SubnetId')
+            if subnet_id:
+                neo4j_session.write_transaction(_load_ec2_subnet_tx, instanceid, subnet_id, region, update_tag)
+
+            if instance.get("KeyName"):
+                key_name = instance["KeyName"]
+                key_pair_arn = f'arn:aws:ec2:{region}:{current_aws_account_id}:key-pair/{key_name}'
+                neo4j_session.write_transaction(
+                    _load_ec2_keypairs_tx,
+                    key_pair_arn,
+                    key_name,
+                    region,
+                    instanceid,
+                    current_aws_account_id,
+                    update_tag,
+                )
+
+            if instance.get("SecurityGroups"):
+                for group in instance["SecurityGroups"]:
+                    group_id = group["GroupId"]
+                    neo4j_session.write_transaction(
+                        _load_ec2_security_groups_tx,
+                        group_id,
+                        group,
+                        instanceid,
+                        region,
+                        current_aws_account_id,
+                        update_tag,
+                    )
+
+            load_ec2_instance_network_interfaces(neo4j_session, instance, update_tag)
+            instance_ebs_volumes_list = get_ec2_instance_ebs_volumes(instance)
+            load_ec2_instance_ebs_volumes(neo4j_session, instance_ebs_volumes_list,
+                                          current_aws_account_id, region, update_tag)
 
 
 @timeit
@@ -309,6 +375,7 @@ def load_ec2_instance_nodes(
         region: str,
         current_aws_account_id: str,
         update_tag: int,
+        region: str
 ) -> None:
     query = """
         UNWIND {ebs_mappings_list} as em
@@ -346,6 +413,7 @@ def load_ec2_instance_ebs_volumes(
         region: str,
         current_aws_account_id: str,
         update_tag: int,
+        neo4j_session: neo4j.Session, ebs_data: List[Dict[str, Any]], current_aws_account_id: str, region: str, update_tag: int,
 ) -> None:
     load(
         neo4j_session,

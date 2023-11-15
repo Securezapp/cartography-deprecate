@@ -273,3 +273,39 @@ def build_rule_check_sync() -> Sync:
         ('analysis', cartography.intel.analysis.run)
     ])
     return sync
+
+def build_default_borneo_sync(skipIndex: bool) -> Sync:
+    sync = Sync()
+    if skipIndex != True:
+        sync.add_stages([('create-indexes', cartography.intel.create_indexes.run)])
+    sync.add_stages([
+        ('aws', cartography.intel.aws.start_aws_ingestion),
+        ('analysis', cartography.intel.analysis.run)
+    ])
+    return sync
+
+def build_borneo_gcp_sync(skipIndex: bool) -> Sync:
+    sync = Sync()
+    if skipIndex != True:
+        sync.add_stages([('create-indexes', cartography.intel.create_indexes.run)])
+    sync.add_stages([
+        ('gcp', cartography.intel.gcp.start_gcp_ingestion),
+        ('analysis', cartography.intel.analysis.run)
+    ])
+    return sync
+
+def build_borneo_okta_sync(skipIndex: bool) -> Sync:
+    sync = Sync()
+    if skipIndex != True:
+        sync.add_stages([('create-indexes', cartography.intel.create_indexes.run)])
+    sync.add_stages([
+        ('okta', cartography.intel.okta.start_okta_ingestion),
+    ])
+    return sync
+
+def build_rule_check_sync() -> Sync:
+    sync = Sync()
+    sync.add_stages([
+        ('analysis', cartography.intel.analysis.run)
+    ])
+    return sync

@@ -7,12 +7,9 @@ import neo4j
 from botocore.exceptions import ClientError
 import cartography.intel.aws.util.common as filterfn
 from cartography.stats import get_stats_client
-from cartography.util import aws_handle_regions
-from cartography.util import aws_paginate
-from cartography.util import dict_value_to_str
-from cartography.util import merge_module_sync_metadata
-from cartography.util import run_cleanup_job
-from cartography.util import timeit
+from cartography.util import (aws_handle_regions,  aws_paginate, dict_value_to_str,
+                              merge_module_sync_metadata, run_cleanup_job,
+                              timeit)
 
 logger = logging.getLogger(__name__)
 stat_handler = get_stats_client(__name__)
@@ -600,7 +597,6 @@ def sync_rds_instances(
         load_rds_instances(neo4j_session, data, region, current_aws_account_id, update_tag)  # type: ignore
     if (not resourceFound):
         cleanup_rds_instances_and_db_subnet_groups(neo4j_session, common_job_parameters)
-
 
 @timeit
 def sync_rds_snapshots(
