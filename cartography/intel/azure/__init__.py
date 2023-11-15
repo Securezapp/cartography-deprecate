@@ -66,6 +66,10 @@ def start_azure_ingestion(neo4j_session: neo4j.Session, config: Config) -> None:
             credentials = Authenticator().authenticate_sp(
                 config.azure_tenant_id, config.azure_client_id, config.azure_client_secret,
             )
+        elif config.borneo_azure_federated_auth:
+            credentials = Authenticator().authenticate_federated_principal(
+                config.azure_tenant_id, config.azure_client_id, config.azure_client_secret,
+            )
         else:
             credentials = Authenticator().authenticate_cli()
 
