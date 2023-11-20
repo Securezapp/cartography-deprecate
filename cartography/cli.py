@@ -186,6 +186,22 @@ class CLI:
             ),
         )
         parser.add_argument(
+            '--borneo-azure-federated-auth',
+            action='store_true',
+            help=(
+                'Use Service Principal authentication for Azure sync.'
+            ),
+        )
+        parser.add_argument(
+            '--borneo-azure-client-secret',
+            type=str,
+            default=None,
+            help=(
+                'Azure Client Secret for Service Principal Authentication.'
+            ),
+        )
+
+        parser.add_argument(
             '--aws-requested-syncs',
             type=str,
             default=None,
@@ -512,7 +528,10 @@ class CLI:
             parse_and_validate_aws_requested_syncs(config.aws_requested_syncs)
 
         # Azure config
-        if config.azure_sp_auth and config.azure_client_secret_env_var:
+        if config.borneo_azure_federated_auth and config.borneo_azure_client_secret:
+            logger.info("Authenticating using a federated IAM connected to Borneo AWS Cognito Role")
+            config.azure_client_secret = config.borneo_azure_client_secret
+        elif config.azure_sp_auth and config.azure_client_secret_env_var:
             logger.debug(
                 "Reading Client Secret for Azure Service Principal Authentication from environment variable %s",
                 config.azure_client_secret_env_var,
@@ -627,6 +646,10 @@ def main(argv=None, sync_flag=None):
         result = CLI(sync, prog='cartography').main(argv)
     elif(requested_sync.startswith("gcp")):
         sync = cartography.sync.build_borneo_gcp_sync("skip_index" in requested_sync)
+        result = CLI(sync, prog='cartography').main(argv)
+    elif(requested_sync.startswith("azure")):
+        sync = cartography.sync.build_borneo_azure_sync("skip_index" in requested_sync)
+        result = CLI(sync, prog='cartography').main(argv)
     elif(requested_sync.startswith("okta")):
         sync = cartography.sync.build_borneo_okta_sync("skip_index" in requested_sync)
         result = CLI(sync, prog='cartography').main(argv)

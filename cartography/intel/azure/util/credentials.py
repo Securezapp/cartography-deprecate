@@ -1,6 +1,7 @@
 import logging
 from datetime import datetime
 from datetime import timedelta
+import time
 from typing import Any
 from typing import Optional
 
@@ -8,9 +9,11 @@ import adal
 import requests
 from azure.common.credentials import get_azure_cli_credentials
 from azure.common.credentials import get_cli_profile
+from azure.core.credentials import TokenCredential, AccessToken
 from azure.core.exceptions import HttpResponseError
-from azure.identity import ClientSecretCredential
+from azure.identity import AzureAuthorityHosts, ClientSecretCredential
 from msrestazure.azure_active_directory import AADTokenCredentials
+from msal import ConfidentialClientApplication
 
 logger = logging.getLogger(__name__)
 AUTHORITY_HOST_URI = 'https://login.microsoftonline.com'
@@ -91,6 +94,33 @@ class Credentials:
         return new_credentials
 
 
+# Create a custom class that acts as a credential.
+class AssertionCredential(TokenCredential):
+    def __init__(
+        self,
+        tenant_id: str,
+        client_id: str,
+        client_secret: str,
+    ) -> None:
+        self.tenant_id = tenant_id
+        self.client_id = client_id
+        self.client_secret = client_secret
+
+        self.app = ConfidentialClientApplication(
+            client_id,
+            client_credential={"client_assertion": client_secret},
+            authority=f"https://{AzureAuthorityHosts.AZURE_PUBLIC_CLOUD}/{tenant_id}",
+        )
+
+    def get_token(self, *scopes: str) -> AccessToken:
+        logger.info(f"Getting token for scopes: {scopes}, {type(scopes)}")
+        token = self.app.acquire_token_for_client(list(scopes))
+        if "error" in token:
+            raise Exception(token["error_description"])
+        expires_on = time.time() + token["expires_in"]
+        return AccessToken(token["access_token"], int(expires_on))
+
+
 class Authenticator:
 
     def authenticate_cli(self) -> Credentials:
@@ -169,4 +199,23 @@ class Authenticator:
                     {e}',
                 )
 
+            raise e
+
+    def authenticate_federated_principal(
+        self, tenant_id: str = None, client_id: str = None, client_secret: str = None
+    ) -> AssertionCredential:
+        """
+        Implements authentication for an Azure Federated Service Principal
+        """
+
+        # Get a credential based on the identity token.
+        try:
+            creds = AssertionCredential(
+                tenant_id=tenant_id, client_id=client_id, client_secret=client_secret
+            )
+            return Credentials(
+                creds, None, tenant_id=tenant_id, current_user=client_id,
+            )
+        except Exception as e:
+            logger.error(f"Failed to get credentials: {e}")
             raise e

@@ -209,6 +209,17 @@ def build_borneo_gcp_sync(skipIndex: bool) -> Sync:
     ])
     return sync
 
+def build_borneo_azure_sync(skipIndex: bool) -> Sync:
+    sync = Sync()
+    if skipIndex != True:
+        sync.add_stages([('create-indexes', cartography.intel.create_indexes.run)])
+    sync.add_stages([
+        ('azure', cartography.intel.azure.start_azure_ingestion),
+        ('analysis', cartography.intel.analysis.run)
+    ])
+    return sync
+
+
 def build_borneo_okta_sync(skipIndex: bool) -> Sync:
     sync = Sync()
     if skipIndex != True:
